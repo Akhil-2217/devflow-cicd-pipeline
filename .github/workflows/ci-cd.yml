@@ -1,7 +1,7 @@
+
 name: CI-CD
 
-# Runs ONLY on pushes to main (i.e. after a pull request is merged).
-# Pull requests are tested by ci.yml and never publish anything.
+# Runs only when code is pushed to main.
 on:
   push:
     branches:
@@ -22,10 +22,12 @@ jobs:
   publish:
     name: publish-to-ghcr
     runs-on: ubuntu-latest
-    needs: ci            # publishing cannot start unless lint, tests and scan passed
+    needs: ci
+
     permissions:
       contents: read
-      packages: write    # only this job may write to GHCR
+      packages: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -49,7 +51,7 @@ jobs:
             type=raw,value=latest
             type=sha,format=long,prefix=
 
-      - name: Build and push image
+      - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .

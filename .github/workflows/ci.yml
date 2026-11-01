@@ -1,8 +1,8 @@
+
 name: CI
 
-# Runs on feature/bugfix/develop pushes and on pull requests to main or develop.
-# Pushes to main are handled by ci-cd.yml, which CALLS this workflow
-# (workflow_call) and then publishes the image. This avoids duplicate runs.
+# Runs on feature/bugfix/develop pushes and pull requests.
+# Also runs when called by ci-cd.yml.
 on:
   push:
     branches-ignore:
@@ -24,6 +24,7 @@ jobs:
   lint:
     name: lint
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -44,6 +45,7 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -58,10 +60,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
-      - name: Run pytest with coverage (fails under 80%)
+      - name: Run pytest with coverage
         run: |
           mkdir -p reports
-          pytest --cov=app --cov-report=term-missing --cov-report=xml:reports/coverage.xml --cov-report=html:reports/htmlcov --cov-fail-under=80
+          pytest --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml:reports/coverage.xml \
+            --cov-report=html:reports/htmlcov \
+            --cov-fail-under=80
 
       - name: Upload coverage report
         if: always()
@@ -75,25 +81,31 @@ jobs:
     name: docker-build-and-scan
     runs-on: ubuntu-latest
     needs: [lint, test]
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build Docker image (not pushed)
+      - name: Build Docker image
         run: docker build -t devflow:ci .
 
       - name: Smoke test container
         run: |
           docker run -d --name devflow-smoke -p 5000:5000 devflow:ci
+
           for i in $(seq 1 15); do
-            if curl -fsS http://localhost:5000/health; then echo; exit 0; fi
+            if curl -fsS http://localhost:5000/health; then
+              echo
+              exit 0
+            fi
             sleep 2
           done
+
           docker logs devflow-smoke
           exit 1
 
-      - name: Trivy report (all severities, informational)
-        uses: aquasecurity/trivy-action@0.36.0
+      - name: Trivy report (all severities)
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: devflow:ci
           format: table
@@ -106,8 +118,8 @@ jobs:
         if: always()
         run: cat trivy-report.txt || true
 
-      - name: Trivy gate (fail on CRITICAL or HIGH with a fix available)
-        uses: aquasecurity/trivy-action@0.36.0
+      - name: Trivy security gate
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: devflow:ci
           format: table
